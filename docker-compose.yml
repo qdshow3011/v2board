@@ -46,8 +46,6 @@ services:
       MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-}
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
-    volumes:
-      - app_data:/var/www/html
     healthcheck:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 9000 || exit 1"]
       interval: 15s
@@ -57,18 +55,16 @@ services:
     networks:
       - v2board-net
 
-  # ------------------- Nginx -------------------
+  # ------------------- Nginx (with app code baked in) --------
   nginx:
     build:
-      context: ./docker/nginx
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: docker/nginx/Dockerfile
     restart: unless-stopped
     depends_on:
       - php
     expose:
       - "80"
-    volumes:
-      - app_data:/var/www/html
     networks:
       - v2board-net
 
@@ -117,8 +113,6 @@ networks:
     driver: bridge
 
 volumes:
-  app_data:
-    driver: local
   mysql_data:
     driver: local
   redis_data:

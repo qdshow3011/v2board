@@ -8,7 +8,6 @@
 vendor
 node_modules
 composer.phar
-composer.lock
 storage/logs/*
 storage/framework/cache/*
 storage/framework/sessions/*
