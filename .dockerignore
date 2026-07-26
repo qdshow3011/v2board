@@ -1,0 +1,26 @@
+.git
+.gitignore
+.github
+.env
+.env.backup
+.env.docker
+.env.docker.example
+vendor
+node_modules
+composer.phar
+composer.lock
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+# Docker compose file and Dockerfile itself (not needed inside image)
+docker-compose.yml
+Dockerfile
+.dockerignore
+# Keep docker/ directory (supervisor configs, entrypoint, cron needed by Dockerfile)
+
+# Tests & IDE
+phpunit.xml
+tests
+.idea
+.DS_Store

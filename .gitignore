@@ -7,6 +7,7 @@
 /vendor
 .env
 .env.backup
+.env.docker
 .phpunit.result.cache
 .idea
 .lock
@@ -17,5 +18,4 @@ yarn-error.log
 composer.phar
 composer.lock
 yarn.lock
-docker-compose.yml
 .DS_Store
