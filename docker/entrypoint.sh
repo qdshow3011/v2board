@@ -4,7 +4,9 @@ set -uo pipefail
 
 # ============================================================
 #  V2Board Docker Entrypoint
-#  Non-interactive initialization: env, DB import, admin user
+#  Starts supervisord FIRST (PHP-FPM on :9000 immediately),
+#  then runs init steps in foreground.
+#  This ensures healthcheck passes while init is running.
 # ============================================================
 
 WORK_DIR="/var/www/html"
@@ -26,6 +28,21 @@ cd "$WORK_DIR"
 : "${ADMIN_EMAIL:=admin@v2board.com}"
 : "${ADMIN_PASSWORD:=}"
 
+# ============================================================
+# PHASE 1: Start supervisord immediately (PHP-FPM on :9000)
+# ============================================================
+echo "[entrypoint] Starting supervisord (PHP-FPM, Horizon, Cron)..."
+supervisord -c /etc/supervisord.conf &
+SUPERVISOR_PID=$!
+
+# Give PHP-FPM a moment to bind to port 9000
+sleep 3
+echo "[entrypoint] PHP-FPM should be listening on :9000 now."
+
+# ============================================================
+# PHASE 2: Run initialization steps
+# ============================================================
+
 # ---- Helper: wait for a TCP service ----
 wait_for() {
     local host="$1" port="$2" name="$3"
@@ -37,13 +54,13 @@ wait_for() {
         fi
         sleep 2
     done
-    echo "[entrypoint] ERROR: $name at $host:$port not reachable after 120s."
+    echo "[entrypoint] WARNING: $name at $host:$port not reachable after 120s, continuing anyway..."
     return 1
 }
 
 # ---- Wait for dependencies ----
-wait_for "$DB_HOST" "$DB_PORT" "MySQL" || echo "[entrypoint] WARNING: MySQL not reachable, continuing anyway..."
-wait_for "$REDIS_HOST" "$REDIS_PORT" "Redis" || echo "[entrypoint] WARNING: Redis not reachable, continuing anyway..."
+wait_for "$DB_HOST" "$DB_PORT" "MySQL"
+wait_for "$REDIS_HOST" "$REDIS_PORT" "Redis"
 
 # ---- Composer install (if vendor dir is missing) ----
 if [ ! -d "vendor" ]; then
@@ -51,6 +68,8 @@ if [ ! -d "vendor" ]; then
     composer install --no-dev --optimize-autoloader --no-interaction || {
         echo "[entrypoint] WARNING: composer install failed, continuing..."
     }
+    # Restart horizon so it picks up the newly installed autoload
+    supervisorctl restart horizon 2>/dev/null || true
 else
     echo "[entrypoint] vendor/ exists, skipping composer install."
 fi
@@ -156,7 +175,9 @@ chmod -R 777 storage bootstrap/cache 2>/dev/null || true
 mkdir -p storage/logs/queue
 chown -R www-data:www-data storage/logs/queue
 
-echo "[entrypoint] Initialization complete. Starting services..."
+echo "[entrypoint] Initialization complete. Services running via supervisord."
 
-# ---- Hand off to CMD (supervisord) ----
-exec "$@"
+# ============================================================
+# PHASE 3: Wait for supervisord to keep container alive
+# ============================================================
+wait $SUPERVISOR_PID
