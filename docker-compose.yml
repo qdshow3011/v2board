@@ -48,6 +48,12 @@ services:
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
     volumes:
       - app_data:/var/www/html
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 9000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 180s
     networks:
       - v2board-net
 
@@ -58,7 +64,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
-      - php
+      php:
+        condition: service_healthy
     expose:
       - "80"
     volumes:

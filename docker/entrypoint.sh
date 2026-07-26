@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+# Do NOT use set -e — non-critical failures should not kill the container
+set -uo pipefail
 
 # ============================================================
 #  V2Board Docker Entrypoint
@@ -41,13 +42,17 @@ wait_for() {
 }
 
 # ---- Wait for dependencies ----
-wait_for "$DB_HOST" "$DB_PORT" "MySQL"
-wait_for "$REDIS_HOST" "$REDIS_PORT" "Redis"
+wait_for "$DB_HOST" "$DB_PORT" "MySQL" || echo "[entrypoint] WARNING: MySQL not reachable, continuing anyway..."
+wait_for "$REDIS_HOST" "$REDIS_PORT" "Redis" || echo "[entrypoint] WARNING: Redis not reachable, continuing anyway..."
 
 # ---- Composer install (if vendor dir is missing) ----
 if [ ! -d "vendor" ]; then
     echo "[entrypoint] Installing Composer dependencies..."
-    composer install --no-dev --optimize-autoloader --no-interaction
+    composer install --no-dev --optimize-autoloader --no-interaction || {
+        echo "[entrypoint] WARNING: composer install failed, continuing..."
+    }
+else
+    echo "[entrypoint] vendor/ exists, skipping composer install."
 fi
 
 # ---- Generate .env from template if missing ----
@@ -88,7 +93,7 @@ fi
 
 # ---- Laravel config cache ----
 php artisan config:clear 2>/dev/null || true
-php artisan config:cache 2>/dev/null || true
+php artisan config:cache 2>/dev/null || echo "[entrypoint] WARNING: config:cache failed, continuing..."
 
 # ---- Import database if not initialized ----
 check_table=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" \
@@ -97,8 +102,8 @@ check_table=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" 
 if [ -z "$check_table" ]; then
     echo "[entrypoint] Database not initialized. Importing install.sql..."
     mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" \
-        "$DB_DATABASE" < database/install.sql 2>/dev/null
-    echo "[entrypoint] Database schema imported."
+        "$DB_DATABASE" < database/install.sql 2>/dev/null || echo "[entrypoint] WARNING: SQL import failed, continuing..."
+    echo "[entrypoint] Database schema import attempted."
 else
     echo "[entrypoint] Database already initialized, skipping import."
 fi
@@ -131,7 +136,7 @@ require 'vendor/autoload.php';
 \$user->is_admin = 1;
 \$user->save();
 echo 'OK';
-" 2>/dev/null
+" 2>/dev/null || echo "[entrypoint] WARNING: admin user creation failed, continuing..."
 
     echo ""
     echo "================================================"
@@ -144,8 +149,8 @@ else
 fi
 
 # ---- Fix permissions ----
-chown -R www-data:www-data storage bootstrap/cache
-chmod -R 777 storage bootstrap/cache
+chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
+chmod -R 777 storage bootstrap/cache 2>/dev/null || true
 
 # ---- Create log directory for horizon ----
 mkdir -p storage/logs/queue
