@@ -29,55 +29,34 @@ cd "$WORK_DIR"
 : "${ADMIN_PASSWORD:=}"
 
 # ============================================================
-# PHASE 1: Start supervisord immediately (PHP-FPM on :9000)
+# PHASE 1: Create .env FIRST (before anything else)
+# so PHP-FPM can serve requests immediately after starting
 # ============================================================
-echo "[entrypoint] Starting supervisord (PHP-FPM, Horizon, Cron)..."
-supervisord -c /etc/supervisord.conf &
-SUPERVISOR_PID=$!
-
-# Give PHP-FPM a moment to bind to port 9000
-sleep 3
-echo "[entrypoint] PHP-FPM should be listening on :9000 now."
-
-# ============================================================
-# PHASE 2: Run initialization steps
-# ============================================================
-
-# ---- Helper: wait for a TCP service ----
-wait_for() {
-    local host="$1" port="$2" name="$3"
-    echo "[entrypoint] Waiting for $name at $host:$port ..."
-    for i in $(seq 1 60); do
-        if nc -z "$host" "$port" 2>/dev/null; then
-            echo "[entrypoint] $name is up."
-            return 0
-        fi
-        sleep 2
-    done
-    echo "[entrypoint] WARNING: $name at $host:$port not reachable after 120s, continuing anyway..."
-    return 1
-}
-
-# ---- Wait for dependencies ----
-wait_for "$DB_HOST" "$DB_PORT" "MySQL"
-wait_for "$REDIS_HOST" "$REDIS_PORT" "Redis"
-
-# ---- Composer install (if vendor dir is missing) ----
-if [ ! -d "vendor" ]; then
-    echo "[entrypoint] Installing Composer dependencies..."
-    composer install --no-dev --optimize-autoloader --no-interaction || {
-        echo "[entrypoint] WARNING: composer install failed, continuing..."
-    }
-    # Restart horizon so it picks up the newly installed autoload
-    supervisorctl restart horizon 2>/dev/null || true
-else
-    echo "[entrypoint] vendor/ exists, skipping composer install."
-fi
-
-# ---- Generate .env from template if missing ----
 if [ ! -f ".env" ]; then
     echo "[entrypoint] Creating .env from environment variables..."
-    cp .env.example .env
+    if [ -f ".env.example" ]; then
+        cp .env.example .env
+    else
+        # Minimal .env if no template exists
+        cat > .env <<EOFNV
+APP_NAME=${APP_NAME}
+APP_ENV=${APP_ENV}
+APP_KEY=
+APP_DEBUG=${APP_DEBUG}
+APP_URL=${APP_URL}
+DB_CONNECTION=mysql
+DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT}
+DB_DATABASE=${DB_DATABASE}
+DB_USERNAME=${DB_USERNAME}
+DB_PASSWORD=${DB_PASSWORD}
+REDIS_HOST=${REDIS_HOST}
+REDIS_PORT=${REDIS_PORT}
+CACHE_DRIVER=redis
+SESSION_DRIVER=redis
+QUEUE_CONNECTION=redis
+EOFNV
+    fi
 
     # Generate APP_KEY
     APP_KEY=$(php -r "echo 'base64:'.base64_encode(random_bytes(32));")
@@ -110,9 +89,56 @@ else
     echo "[entrypoint] .env already exists, skipping generation."
 fi
 
-# ---- Laravel config cache ----
+# ---- Laravel config cache (run before PHP-FPM starts) ----
 php artisan config:clear 2>/dev/null || true
 php artisan config:cache 2>/dev/null || echo "[entrypoint] WARNING: config:cache failed, continuing..."
+
+# ============================================================
+# PHASE 2: Start supervisord immediately (PHP-FPM on :9000)
+# Now .env and vendor/ are ready, so PHP can serve requests
+# ============================================================
+echo "[entrypoint] Starting supervisord (PHP-FPM, Horizon, Cron)..."
+supervisord -c /etc/supervisord.conf &
+SUPERVISOR_PID=$!
+
+# Give PHP-FPM a moment to bind to port 9000
+sleep 3
+echo "[entrypoint] PHP-FPM should be listening on :9000 now."
+
+# ============================================================
+# PHASE 3: Run database initialization (in background-safe order)
+# ============================================================
+
+# ---- Helper: wait for a TCP service ----
+wait_for() {
+    local host="$1" port="$2" name="$3"
+    echo "[entrypoint] Waiting for $name at $host:$port ..."
+    for i in $(seq 1 60); do
+        if nc -z "$host" "$port" 2>/dev/null; then
+            echo "[entrypoint] $name is up."
+            return 0
+        fi
+        sleep 2
+    done
+    echo "[entrypoint] WARNING: $name at $host:$port not reachable after 120s, continuing anyway..."
+    return 1
+}
+
+# ---- Wait for dependencies ----
+wait_for "$DB_HOST" "$DB_PORT" "MySQL"
+wait_for "$REDIS_HOST" "$REDIS_PORT" "Redis"
+
+# ---- Composer install (fallback: if vendor/ missing from volume) ----
+if [ ! -d "vendor" ]; then
+    echo "[entrypoint] vendor/ missing, installing Composer dependencies..."
+    composer install --no-dev --optimize-autoloader --no-interaction || {
+        echo "[entrypoint] WARNING: composer install failed, continuing..."
+    }
+    # Restart horizon so it picks up the newly installed autoload
+    supervisorctl restart horizon 2>/dev/null || true
+else
+    echo "[entrypoint] vendor/ exists, skipping composer install."
+fi
 
 # ---- Import database if not initialized ----
 check_table=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" \
@@ -178,6 +204,6 @@ chown -R www-data:www-data storage/logs/queue
 echo "[entrypoint] Initialization complete. Services running via supervisord."
 
 # ============================================================
-# PHASE 3: Wait for supervisord to keep container alive
+# PHASE 4: Wait for supervisord to keep container alive
 # ============================================================
 wait $SUPERVISOR_PID

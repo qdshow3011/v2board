@@ -57,9 +57,14 @@ WORKDIR /var/www/html
 
 COPY . /var/www/html
 
+# Install Composer dependencies during BUILD (not runtime)
+# This ensures vendor/ exists when PHP-FPM starts, preventing 502 errors
+RUN composer install --no-dev --optimize-autoloader --no-interaction
+
 # Copy Docker config files
 COPY docker/supervisor/supervisord.conf /etc/supervisord.conf
 COPY docker/supervisor/conf.d/ /etc/supervisor.d/
+COPY docker/php-fpm/zz-docker.conf /usr/local/etc/php-fpm.d/zz-docker.conf
 COPY docker/entrypoint.sh /entrypoint.sh
 COPY docker/cron/v2board /etc/crontabs/www-data
 
