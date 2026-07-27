@@ -165,12 +165,12 @@ else
 fi
 
 # ---- Import database if not initialized ----
-check_table=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" \
+check_table=$(mysql --skip-ssl -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" \
     "$DB_DATABASE" -N -e "SHOW TABLES LIKE 'v2_user';" 2>/dev/null || true)
 
 if [ -z "$check_table" ]; then
     echo "[entrypoint] Database not initialized. Importing install.sql..."
-    mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" \
+    mysql --skip-ssl -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" \
         "$DB_DATABASE" < database/install.sql 2>/dev/null || echo "[entrypoint] WARNING: SQL import failed, continuing..."
     echo "[entrypoint] Database schema import attempted."
 else
