@@ -67,8 +67,9 @@ QUEUE_CONNECTION=redis
 EOFNV
     fi
 
-    # Generate APP_KEY only when one was not supplied by the runtime.
-    if [ -z "$APP_KEY" ]; then
+    # Generate APP_KEY only when one was not supplied or is invalid format.
+    # Laravel requires base64: prefix with 32 raw bytes (44 chars after base64:).
+    if [ -z "$APP_KEY" ] || ! echo "$APP_KEY" | grep -q '^base64:'; then
         APP_KEY=$(php -r "echo 'base64:'.base64_encode(random_bytes(32));")
     fi
     sed -i "s|^APP_NAME=.*|APP_NAME=${APP_NAME}|" .env
@@ -108,6 +109,17 @@ EOFNV
     echo "[entrypoint] .env created."
 else
     echo "[entrypoint] .env already exists, skipping generation."
+fi
+
+# ---- Validate and fix APP_KEY (even if .env already exists) ----
+CURRENT_KEY=$(grep "^APP_KEY=" .env | cut -d'=' -f2-)
+if [ -z "$CURRENT_KEY" ] || ! echo "$CURRENT_KEY" | grep -q '^base64:'; then
+    echo "[entrypoint] APP_KEY is missing or invalid format (must start with base64:). Generating new key..."
+    NEW_KEY=$(php -r "echo 'base64:'.base64_encode(random_bytes(32));")
+    sed -i "s|^APP_KEY=.*|APP_KEY=${NEW_KEY}|" .env
+    echo "[entrypoint] APP_KEY regenerated."
+else
+    echo "[entrypoint] APP_KEY format OK."
 fi
 
 # ---- Laravel config cache (run before PHP-FPM starts) ----
