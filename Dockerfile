@@ -77,7 +77,8 @@ COPY docker/entrypoint.sh /entrypoint.sh
 COPY docker/cron/v2board /etc/crontabs/www-data
 
 RUN chmod +x /entrypoint.sh \
-    && mkdir -p storage/framework/cache/data \
+    && mkdir -p /var/log/supervisor \
+              storage/framework/cache/data \
               storage/framework/sessions \
               storage/framework/views \
               storage/logs \
