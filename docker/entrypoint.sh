@@ -25,8 +25,17 @@ cd "$WORK_DIR"
 : "${APP_ENV:=production}"
 : "${APP_DEBUG:=false}"
 : "${APP_URL:=http://localhost}"
+: "${APP_KEY:=}"
 : "${ADMIN_EMAIL:=admin@v2board.com}"
 : "${ADMIN_PASSWORD:=}"
+: "${MAIL_DRIVER:=smtp}"
+: "${MAIL_HOST:=}"
+: "${MAIL_PORT:=587}"
+: "${MAIL_USERNAME:=}"
+: "${MAIL_PASSWORD:=}"
+: "${MAIL_ENCRYPTION:=tls}"
+: "${MAIL_FROM_ADDRESS:=}"
+: "${MAIL_FROM_NAME:=${APP_NAME}}"
 
 # ============================================================
 # PHASE 1: Create .env FIRST (before anything else)
@@ -58,8 +67,10 @@ QUEUE_CONNECTION=redis
 EOFNV
     fi
 
-    # Generate APP_KEY
-    APP_KEY=$(php -r "echo 'base64:'.base64_encode(random_bytes(32));")
+    # Generate APP_KEY only when one was not supplied by the runtime.
+    if [ -z "$APP_KEY" ]; then
+        APP_KEY=$(php -r "echo 'base64:'.base64_encode(random_bytes(32));")
+    fi
     sed -i "s|^APP_NAME=.*|APP_NAME=${APP_NAME}|" .env
     sed -i "s|^APP_ENV=.*|APP_ENV=${APP_ENV}|" .env
     sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
@@ -79,6 +90,16 @@ EOFNV
     if [ -n "$REDIS_PASSWORD" ] && [ "$REDIS_PASSWORD" != "null" ]; then
         sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=${REDIS_PASSWORD}|" .env
     fi
+
+    # Mail
+    sed -i "s|^MAIL_DRIVER=.*|MAIL_DRIVER=${MAIL_DRIVER}|" .env
+    sed -i "s|^MAIL_HOST=.*|MAIL_HOST=${MAIL_HOST}|" .env
+    sed -i "s|^MAIL_PORT=.*|MAIL_PORT=${MAIL_PORT}|" .env
+    sed -i "s|^MAIL_USERNAME=.*|MAIL_USERNAME=${MAIL_USERNAME}|" .env
+    sed -i "s|^MAIL_PASSWORD=.*|MAIL_PASSWORD=${MAIL_PASSWORD}|" .env
+    sed -i "s|^MAIL_ENCRYPTION=.*|MAIL_ENCRYPTION=${MAIL_ENCRYPTION}|" .env
+    sed -i "s|^MAIL_FROM_ADDRESS=.*|MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS}|" .env
+    sed -i "s|^MAIL_FROM_NAME=.*|MAIL_FROM_NAME=${MAIL_FROM_NAME}|" .env
 
     # Cache & Queue
     sed -i "s|^CACHE_DRIVER=.*|CACHE_DRIVER=redis|" .env

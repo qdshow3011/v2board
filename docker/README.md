@@ -1,5 +1,7 @@
 # V2Board Docker 部署
 
+> Coolify deployment: see [COOLIFY.md](COOLIFY.md).
+
 使用 Docker Compose 一键部署 V2Board，包含 Nginx + PHP-FPM + MySQL + Redis 完整运行环境。
 
 ## 目录结构
