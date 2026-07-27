@@ -64,7 +64,6 @@ services:
       start_period: 30s
     networks:
       - v2board-net
-      - coolify
 
   mysql:
     image: mysql:8.0
@@ -108,9 +107,6 @@ services:
 networks:
   v2board-net:
     driver: bridge
-  coolify:
-    external: true
-    name: coolify-proxy
 
 volumes:
   mysql_data:
