@@ -57,9 +57,17 @@ WORKDIR /var/www/html
 
 COPY . /var/www/html
 
+# Configure composer: use Alibaba mirror for China connectivity + longer timeout
+ENV COMPOSER_ALLOW_XDEBUG=1
+ENV COMPOSER_PROCESS_TIMEOUT=600
+ENV COMPOSER_NO_INTERACTION=1
+RUN composer config -g repo.packagist composer https://mirrors.aliyun.com/composer/
+
 # Install Composer dependencies during BUILD (not runtime)
+# --no-scripts: skip post-autoload-dump (artisan package:discover) which fails
+#   without .env; these scripts run in entrypoint.sh instead
 # This ensures vendor/ exists when PHP-FPM starts, preventing 502 errors
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+RUN composer install --no-dev --no-scripts --optimize-autoloader
 
 # Copy Docker config files
 COPY docker/supervisor/supervisord.conf /etc/supervisord.conf

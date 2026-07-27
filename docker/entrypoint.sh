@@ -114,6 +114,9 @@ fi
 php artisan config:clear 2>/dev/null || true
 php artisan config:cache 2>/dev/null || echo "[entrypoint] WARNING: config:cache failed, continuing..."
 
+# ---- Run package discovery (skipped during build via --no-scripts) ----
+php artisan package:discover 2>/dev/null || echo "[entrypoint] WARNING: package:discover failed, continuing..."
+
 # ============================================================
 # PHASE 2: Start supervisord immediately (PHP-FPM on :9000)
 # Now .env and vendor/ are ready, so PHP can serve requests
